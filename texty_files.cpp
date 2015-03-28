@@ -14,7 +14,8 @@
 
 using namespace std;
 
-#define MAX_PATH 1000
+#define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
+#define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 
 bool is_dir(const char* path)
 {
@@ -38,24 +39,28 @@ bool is_dir(const char* path)
 // register stores those strings in a CSV line in all_users.txt in the directory files
 void register(string& fn, string& ln, string& email, string& un, string& pw)
 {
-	char* buf = malloc(MAX_PATH * sizeof(char));
-	char* dir_buf = malloc(MAX_PATH * sizeof(char));
+	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
+	char* buf = (char*) malloc(MAX_PATH * sizeof(char));
+	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
 	buf = getcwd(buf, MAX_PATH);
-	dir_buf = strcat(buf, "/files");
-	if (!is_dir("~/files")) {
+	strcpy(dir_buf, buf);
+	dir_buf = strcat(dir_buf, USER_DIR);
+
+	if (!is_dir(dir_buf)) {
 		// If the files directory doesn't exist, create it with RWX permissions for everyone
 		int status;
-		status = mkdir("~/files", S_IRWXU | S_IRWXG | S_IRWXO);
+		status = mkdir(dir_buf, S_IRWXU|S_IRWXG|S_IRWXO);
 		if (status == -1) {
 			// mkdir was not successful
 			cout << endl << "ERROR: mkdir could not create directory" << endl;
 			exit(1);
 		}
+		chmod(dir_buf, S_IRWXU|S_IRWXG|S_IRWXO); // give everyone RWX permissions
 	}
 
-	chdir("~/files");
+	chdir(dir_buf); // access data inside USER_DIR directory, so change to that directory
 
-	chdir(buf);
+	chdir(buf); // change the CWD back to its initial position at the beginning of the function
 }
 
 
