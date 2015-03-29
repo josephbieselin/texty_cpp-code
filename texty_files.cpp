@@ -17,6 +17,7 @@ using namespace std;
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 #define ALL_USERS_FILE "all_users.txt"	// corresponds to file with every user's info and index number
+#define MAX_INDEX 1000000	// maximum number of user indexes that can be used at creation of files
 
 bool is_dir(const char* path)
 {
@@ -41,24 +42,29 @@ bool file_exists(const char* name)
 {
 	ifstream fh(name);
 	if (fh.good()) {
-		f.close();
+		fh.close();
 		return true;
 	} else {
-		f.close();
+		fh.close();
 		return false;
 	}
 }
 
-void create_user_files()
+// Create 3 text files in the passed in directory: followees, followers, texts
+void create_user_files(const char* dir)
 {
-
+	chdir(dir);
+	ofstream f1.open("followees.txt"); f1.close();
+	ofstream f2.open("followers.txt"); f2.close();
+	ofstream f3.open("texts.txt"); f3.close();
 }
 
 // A new user needs to be created
 // Each user has a directory corresponding to their index number
 // Each user's directory has 3 text files: followees, followers, texts
-void create_user_dir(const char* user_index)
+void create_user_dir(const char* user_index, const char* dir)
 {
+	chdir(dir);
 	status = mkdir(user_index, S_IRWXU|S_IRWXG|S_IRWXO);
 	if (status == -1) {
 		// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED
@@ -68,8 +74,12 @@ void create_user_dir(const char* user_index)
 		// return -1; ????
 	}
 	chmod(user_index, S_IRWXU|S_IRWXG|S_IRWXO); // give everyone RWX permissions
-
-	create_user_files();
+	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
+	strcpy(dir_buf, dir);
+	dir_buf = strcat(dir_buf, "/");
+	dir_buf = strcat(dir_buf, user_index);
+	create_user_files(dir_buf);
+	chdir(dir);
 }
 
 // register takes in 5 strings: first name, last name, email, username, password
@@ -113,16 +123,25 @@ void register(string& fn, string& ln, string& email, string& un, string& pw)
 	Each line contains strings representing user info separated by commas and ending with the '\n' character
 	*/
 
-	if (!file_exists(filename)) {
+	if (!file_exists(file_path)) {
 		// If the file doesn't exist, create it
 		ofstream fh;
-		fh.open(filename);
+		fh.open(file_path);
 		// 1st user created will have an index of 1, which changes N to 2 for the next user to register
 		fh << "2" << '\n';
 		fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
 		// Create the new user's directory and followees.txt, followers.txt, texts.txt files
-		create_user_dir("1");
+		create_user_dir("1", dir_buf);
+		fh.close();
+	} else {
+		ifstream fh;
+		fh.open(file_path);
+		char* index = (char*) malloc(MAX_INDEX * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+		fh.getline(index, MAX_INDEX - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+
+		fh.close();
 	}
+
 
 	chdir(buf); // change the CWD back to its initial position at the beginning of the function
 

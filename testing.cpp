@@ -14,12 +14,28 @@ using namespace std;
 
 #define USER_DIR "/files"
 
+bool file_exists(const char* name)
+{
+	ifstream fh(name);
+	if (fh.good()) {
+		fh.close();
+		return true;
+	} else {
+		fh.close();
+		return false;
+	}
+}
+
 
 int main() {
 
 
-
-
+	char* dir = (char*) malloc(100);
+	//dir = getcwd(dir, MAX_PATH)
+	strcat(getcwd(dir, MAX_PATH), "/files");
+	chdir(dir);
+	const char* name = "test.txt";
+	cout << file_exists(name) << endl;
 
 
 
