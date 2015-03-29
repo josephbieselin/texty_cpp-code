@@ -48,7 +48,7 @@ bool is_dir(const char* path)
 // file_exists checks whether the filename passed to it 
 bool file_exists(const char* name)
 {
-	ifstream fh(name);
+	fstream fh(name);
 	if (fh.good()) {
 		fh.close();
 		return true;
@@ -62,9 +62,9 @@ bool file_exists(const char* name)
 void create_user_files(const char* dir)
 {
 	chdir(dir);
-	ofstream f1.open("followees.txt"); f1.close();
-	ofstream f2.open("followers.txt"); f2.close();
-	ofstream f3.open("texts.txt"); f3.close();
+	fstream f1.open("followees.txt"); f1.close();
+	fstream f2.open("followers.txt"); f2.close();
+	fstream f3.open("texts.txt"); f3.close();
 }
 
 // A new user needs to be created
@@ -90,28 +90,31 @@ void create_user_dir(const char* user_index, const char* dir)
 	chdir(dir);
 }
 
-bool user_exists(ifstream& fh, string& un, string& email)
+bool user_exists(fstream& fh, string& un, string& email)
 {
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
 	char* test_un = (char*) malloc(UN_BYTES * sizeof(char));
 	char* test_email = (char*) malloc(EMAIL_BYTES * sizeof(char));
-	fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
-	if (strcmp(test_un, un) == 0)
-		return false;
-	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-	if (strcmp(test_email, email))
-		return false
-	fh.getline();
+	char* garbage = (char*) malloc(GARBAGE_BYTES *sizeof(char));
 
+	while (!fh.eof()) {
+		fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+		if (strcmp(test_un, un.c_str()) == 0)
+			return true; // the passed in username is equal to a username already created
 
+		// ',' is the next character in the stream, so just get that
+		fh.get(); //garbage, 2);
 
-		char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-		fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+		// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+		fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+		if (strcmp(test_email, email.c_str()) == 0)
+			return true; // the passed in email is equal to an email already created
 
-
-
-
+		// get the rest of the line until '\n' is reached
+		fh.getline(garbage, GARBAGE_BYTES);
+	}
+	return false; // the username and email passed in were not found
 }
 
 // register takes in 5 strings: first name, last name, email, username, password
@@ -158,38 +161,42 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 
 	if (!file_exists(file_path)) {
 		// If the file doesn't exist, create it
-		ofstream fh;
+		fstream fh;
 		fh.open(file_path);
 		if (!fh.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
+		} else {
+			// 1st user created will have an index of 1, which changes N to 2 for the next user to register
+			fh << "2" << '\n';
+			fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
+			// Create the new user's directory and followees.txt, followers.txt, texts.txt files
+			create_user_dir("1", dir_buf);
+			fh.close();
 		}
-		// 1st user created will have an index of 1, which changes N to 2 for the next user to register
-		fh << "2" << '\n';
-		fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
-		// Create the new user's directory and followees.txt, followers.txt, texts.txt files
-		create_user_dir("1", dir_buf);
-		fh.close();
-	} else {
-		ifstream fh;
+	} else { // file does exist
+		fstream fh;
 		fh.open(file_path);
 		if (!fh.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
 			return;
+		} else { // file is opened
+			char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+			fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+
+			if (user_exists(fh, un, email)) {
+				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
+				cout << endl << "ERROR: username or email already exist" << endl;
+				return;
+			} else { // fh got to EOF in user_exists so user does not exist
+				// input the user data into the file stream with comma separation and an EOL character
+				cin >> un >> "," >> email >> "," >> index >> "," >> pw >> "," >> "fn" >> "," >> "ln" >> '\n';
+			}
+
+			fh.close();
+			free(index);
 		}
-
-		char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-		fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
-
-		if (user_exists(fh, un, email)) {
-			// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
-			cout << endl << "ERROR: username or email already exist" << endl;
-			return;
-		}
-
-		fh.close();
-		free(index);
 	}
 
 

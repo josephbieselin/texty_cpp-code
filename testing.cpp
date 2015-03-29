@@ -21,103 +21,106 @@ using namespace std;
 #define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
 #define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
 
-int main() {
+// // Copy a file
+// #include <fstream>      // std::ifstream, std::ofstream
+
+// int main () {
+//   std::ifstream infile ("test.txt",std::ifstream::binary);
+//   std::ofstream outfile ("new.txt",std::ofstream::binary);
+
+//   // get size of file
+//   infile.seekg (0,infile.end);
+//   long size = infile.tellg();
+//   infile.seekg (0);
+
+//   // allocate memory for file content
+//   char* buffer = new char[size];
+
+//   // read content of infile
+//   infile.read (buffer,size);
+
+//   // write to outfile
+//   outfile.write (buffer,size);
+
+//   // release dynamically-allocated memory
+//   delete[] buffer;
+
+//   outfile.close();
+//   infile.close();
+//   return 0;
+// }
 
 
-	string un = "jb";
-	string email = "joe@g";
 
-	ifstream fh;
-	fh.open("samp.txt");
-	if (!fh.is_open()) {
-		// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
-		cout << endl << "ERROR: could not open all_users.txt" << endl;
-	}
-
-
-	char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-	fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
-
-
+bool user_exists(fstream& fh, string& un, string& email)
+{
+	// test_info is one line from the all_users.txt file
+	// test_info = un,email,index,pw,fn,ln
 	char* test_un = (char*) malloc(UN_BYTES * sizeof(char));
 	char* test_email = (char*) malloc(EMAIL_BYTES * sizeof(char));
 	char* garbage = (char*) malloc(GARBAGE_BYTES *sizeof(char));
-	
-	// gets up to UN_BYTES characters or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
-	fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
-	cout << test_un << " ?= " << un << endl;
-	if (strcmp(test_un, un.c_str()) == 0)
-		cout << false << endl;
-	else
-		cout << true << endl;
 
-	// ',' is the next character in the stream, so just get that
-	fh.get(); //garbage, 2);
+	while (!fh.eof()) {
+		fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+		if (strcmp(test_un, un.c_str()) == 0)
+			return true; // the passed in username is equal to a username already created
 
-	// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
-	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-	cout << test_email << " ?= " << email << endl;
-	if (strcmp(test_email, email.c_str()) == 0)
-		cout << false << endl;
-	else
-		cout << true << endl;
+		// ',' is the next character in the stream, so just get that
+		fh.get(); //garbage, 2);
 
-	// get the rest of the line until '\n' is reached
-	fh.getline(garbage, GARBAGE_BYTES);
-	cout << garbage << endl;
+		// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+		fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+		if (strcmp(test_email, email.c_str()) == 0)
+			return true; // the passed in email is equal to an email already created
+
+		// get the rest of the line until '\n' is reached
+		fh.getline(garbage, GARBAGE_BYTES);
+	}
+	return false; // the username and email passed in were not found
+}
 
 
-	fh.get(test_un, UN_BYTES, ',');
-	cout << test_un << " ?= " << un << endl;
-	if (strcmp(test_un, un.c_str()) == 0)
-		cout << false << endl;
-	else
-		cout << true << endl;
+int main() {
 
-	fh.get();
+	string un = "lk";
+	string email = "lk@g";
+	string index = "4";
+	string pw = "hi";
+	string fn = "j";
+	string ln = "b";
 
-	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-	cout << test_email << " ?= " << email << endl;
-	if (strcmp(test_email, email.c_str()) == 0)
-		cout << false << endl;
-	else
-		cout << true << endl;
+	//char* buf = (char*) malloc(MAX_USER_INFO_BYTES * sizeof(char));
 
+	string info = un + "," + email + "," + index + "," + pw + "," + fn + "," + ln + '\n';
+	cout << info << endl;
+	const char* buffer = info.c_str();
+	// strcat( strcat(buf, ","), email );
+	cout << strlen(buffer) << endl;
 
-	// const char* c = "hello";
-	// my_cstr c2(10, c);
-	// cout << c2 << endl;
-	// c2.new_val("bye");
-	// cout << c2 << endl;
-	// my_cstr c3(c2);
-	// cout << c3 << endl;
-	// c3 = c3;
-	// c3.new_val("hola");
-	// cout << c3 << endl;
-	// c3 = c2;
-	// cout << c3 << endl;
+	fstream fh;
+	fh.open("samp.txt");
+	fh.seekp(0, ios::end);
+	fh.write(buffer, strlen(buffer));
 
-	// my_cstr buf(MAX_PATH);
-	// getcwd(buf.val, MAX_PATH);
-	// // cout << buf.val << endl;
-	// cout << buf.val << endl;
-	// my_cstr dir_buf(buf);
-	// strcat(dir_buf.val, USER_DIR);
-	// cout << dir_buf.val << endl;
-	// cout << buf.val << endl;
+	if (!fh.is_open()) {
+		// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
+		cout << endl << "ERROR: could not open all_users.txt" << endl;
+		return 0;
+	} else { // file is opened
+		char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+		fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
 
-	// char* buf = (char*) malloc(MAX_PATH * sizeof(char));
-	// char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
-	// buf = getcwd(buf, MAX_PATH);
-	// cout << buf << endl;
+		if (user_exists(fh, un, email)) {
+			// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
+			cout << endl << "ERROR: username or email already exist" << endl;
+			return 0;
+		} else { // fh got to EOF in user_exists so user does not exist
+			// input the user data into the file stream with comma separation and an EOL character
+			//fh.write(buffer, strlen(buffer));
+			//cin >> un >> "," ;//>> email >> "," >> index >> "," >> pw >> "," >> "fn" >> "," >> "ln" >> '\n';
+		}
+	}
 
-
-	// strcpy(dir_buf, buf);
-	// dir_buf = strcat(dir_buf, USER_DIR);
-
-	// const char* filename = "all_users.txt";
-	// ofstream fh;
-	// fh.open(filename);
 }
 
 
@@ -165,3 +168,83 @@ int main() {
 // 		strcpy(val, str.c_str());
 // 	}
 // };
+
+
+
+
+
+	// // gets up to UN_BYTES characters or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+	// fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+	// cout << test_un << " ?= " << un << endl;
+	// if (strcmp(test_un, un.c_str()) == 0)
+	// 	cout << false << endl;
+	// else
+	// 	cout << true << endl;
+
+	// // ',' is the next character in the stream, so just get that
+	// fh.get(); //garbage, 2);
+
+	// // gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+	// fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+	// cout << test_email << " ?= " << email << endl;
+	// if (strcmp(test_email, email.c_str()) == 0)
+	// 	cout << false << endl;
+	// else
+	// 	cout << true << endl;
+
+	// // get the rest of the line until '\n' is reached
+	// fh.getline(garbage, GARBAGE_BYTES);
+	// cout << garbage << endl;
+
+
+	// fh.get(test_un, UN_BYTES, ',');
+	// cout << test_un << " ?= " << un << endl;
+	// if (strcmp(test_un, un.c_str()) == 0)
+	// 	cout << false << endl;
+	// else
+	// 	cout << true << endl;
+
+	// fh.get();
+
+	// fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+	// cout << test_email << " ?= " << email << endl;
+	// if (strcmp(test_email, email.c_str()) == 0)
+	// 	cout << false << endl;
+	// else
+	// 	cout << true << endl;
+
+
+	// const char* c = "hello";
+	// my_cstr c2(10, c);
+	// cout << c2 << endl;
+	// c2.new_val("bye");
+	// cout << c2 << endl;
+	// my_cstr c3(c2);
+	// cout << c3 << endl;
+	// c3 = c3;
+	// c3.new_val("hola");
+	// cout << c3 << endl;
+	// c3 = c2;
+	// cout << c3 << endl;
+
+	// my_cstr buf(MAX_PATH);
+	// getcwd(buf.val, MAX_PATH);
+	// // cout << buf.val << endl;
+	// cout << buf.val << endl;
+	// my_cstr dir_buf(buf);
+	// strcat(dir_buf.val, USER_DIR);
+	// cout << dir_buf.val << endl;
+	// cout << buf.val << endl;
+
+	// char* buf = (char*) malloc(MAX_PATH * sizeof(char));
+	// char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
+	// buf = getcwd(buf, MAX_PATH);
+	// cout << buf << endl;
+
+
+	// strcpy(dir_buf, buf);
+	// dir_buf = strcat(dir_buf, USER_DIR);
+
+	// const char* filename = "all_users.txt";
+	// ofstream fh;
+	// fh.open(filename);
