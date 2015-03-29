@@ -80,6 +80,7 @@ void create_user_dir(const char* user_index, const char* dir)
 		cout << endl << "ERROR: mkdir could not create this new user's directory" << endl;
 		// exit(1); ??????
 		// return -1; ????
+		return;
 	}
 	chmod(user_index, S_IRWXU|S_IRWXG|S_IRWXO); // give everyone RWX permissions
 	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
@@ -88,6 +89,7 @@ void create_user_dir(const char* user_index, const char* dir)
 	dir_buf = strcat(dir_buf, user_index);
 	create_user_files(dir_buf);
 	chdir(dir);
+	free(dir_buf);
 }
 
 bool user_exists(fstream& fh, string& un, string& email)
@@ -108,12 +110,14 @@ bool user_exists(fstream& fh, string& un, string& email)
 
 		// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
 		fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-		if (strcmp(test_email, email.c_str()) == 0)
+		if (strcmp(test_email, email.c_str()) == 0) {
+			free(test_un); free(test_email); free(garbage);
 			return true; // the passed in email is equal to an email already created
-
+		}
 		// get the rest of the line until '\n' is reached
 		fh.getline(garbage, GARBAGE_BYTES);
 	}
+	free(test_un); free(test_email); free(garbage);
 	return false; // the username and email passed in were not found
 }
 
@@ -135,6 +139,7 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 		if (status == -1) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED
 			// mkdir was not successful
+			free(buf); free(dir_buf);
 			cout << endl << "ERROR: mkdir could not create files directory" << endl;
 			// exit(1); ?????
 			// return -1; ???
@@ -166,6 +171,8 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 		if (!fh.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
+			free(buf); free(dir_buf); free(file_path);
+			return;
 		} else {
 			// 1st user created will have an index of 1, which changes N to 2 for the next user to register
 			fh << "2" << '\n';
@@ -179,6 +186,7 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 		fh.open(file_path);
 		if (!fh.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
+			free(buf); free(dir_buf); free(file_path);
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
 			return;
 		} else { // file is opened
@@ -187,11 +195,16 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 
 			if (user_exists(fh, un, email)) {
 				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
+				free(buf); free(dir_buf); free(file_path); free(index);
 				cout << endl << "ERROR: username or email already exist" << endl;
 				return;
 			} else { // fh got to EOF in user_exists so user does not exist
 				// input the user data into the file stream with comma separation and an EOL character
-				cin >> un >> "," >> email >> "," >> index >> "," >> pw >> "," >> "fn" >> "," >> "ln" >> '\n';
+				string info = un + "," + email + "," + index + "," + pw + "," + fn + "," + ln + '\n';
+				const char* buffer = info.c_str();
+				fh.seekp(0, ios::end); // go to end of file to write user data in string info
+				fh.write(buffer, strlen(buffer));
+				free(buffer);
 			}
 
 			fh.close();
@@ -199,13 +212,8 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 		}
 	}
 
-
-
 	chdir(buf); // change the CWD back to its initial position at the beginning of the function
-
-	free(buf);
-	free(dir_buf);
-	free(file_path);
+	free(buf); free(dir_buf); free(file_path);
 }
 
 
