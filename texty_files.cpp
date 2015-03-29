@@ -17,7 +17,15 @@ using namespace std;
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 #define ALL_USERS_FILE "all_users.txt"	// corresponds to file with every user's info and index number
-#define MAX_INDEX 1000000	// maximum number of user indexes that can be used at creation of files
+#define MAX_INDEX_BYTES 10		// maximum number of user indexes that can be used at creation of files: 10 bytes = 999999999 possible indexes for a cstring
+#define MAX_USER_INFO_BYTES 118	// maximum number of bytes each line in all_users.txt will be for each user including: user's data, commas, and '\n' character
+#define UN_BYTES 17			// maximum number of characters in username based on value limited in PHP file
+#define EMAIL_BYTES 41		// maximum number of characters in email based on value limited in PHP file
+#define PW_BYTES 17			// maximum number of characters in password based on value limited in PHP file
+#define FN_BYTES 21			// maximum number of characters in first name based on value limited in PHP file
+#define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
+#define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
+
 
 bool is_dir(const char* path)
 {
@@ -82,9 +90,33 @@ void create_user_dir(const char* user_index, const char* dir)
 	chdir(dir);
 }
 
+bool user_exists(ifstream& fh, string& un, string& email)
+{
+	// test_info is one line from the all_users.txt file
+	// test_info = un,email,index,pw,fn,ln
+	char* test_un = (char*) malloc(UN_BYTES * sizeof(char));
+	char* test_email = (char*) malloc(EMAIL_BYTES * sizeof(char));
+	fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+	if (strcmp(test_un, un) == 0)
+		return false;
+	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+	if (strcmp(test_email, email))
+		return false
+	fh.getline();
+
+
+
+		char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+		fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+
+
+
+
+}
+
 // register takes in 5 strings: first name, last name, email, username, password
 // register stores those strings in a CSV line in all_users.txt in the directory files
-void register(string& fn, string& ln, string& email, string& un, string& pw)
+void register(string& un, string& email, string& pw, string& fn, string& ln)
 {
 	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
 	char* buf = (char*) malloc(MAX_PATH * sizeof(char));
@@ -103,6 +135,7 @@ void register(string& fn, string& ln, string& email, string& un, string& pw)
 			cout << endl << "ERROR: mkdir could not create files directory" << endl;
 			// exit(1); ?????
 			// return -1; ???
+			return;
 		}
 		chmod(dir_buf, S_IRWXU|S_IRWXG|S_IRWXO); // give everyone RWX permissions
 	}
@@ -127,6 +160,10 @@ void register(string& fn, string& ln, string& email, string& un, string& pw)
 		// If the file doesn't exist, create it
 		ofstream fh;
 		fh.open(file_path);
+		if (!fh.is_open()) {
+			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
+			cout << endl << "ERROR: could not open all_users.txt" << endl;
+		}
 		// 1st user created will have an index of 1, which changes N to 2 for the next user to register
 		fh << "2" << '\n';
 		fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
@@ -136,11 +173,25 @@ void register(string& fn, string& ln, string& email, string& un, string& pw)
 	} else {
 		ifstream fh;
 		fh.open(file_path);
-		char* index = (char*) malloc(MAX_INDEX * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-		fh.getline(index, MAX_INDEX - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+		if (!fh.is_open()) {
+			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
+			cout << endl << "ERROR: could not open all_users.txt" << endl;
+			return;
+		}
+
+		char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+		fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+
+		if (user_exists(fh, un, email)) {
+			// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
+			cout << endl << "ERROR: username or email already exist" << endl;
+			return;
+		}
 
 		fh.close();
+		free(index);
 	}
+
 
 
 	chdir(buf); // change the CWD back to its initial position at the beginning of the function

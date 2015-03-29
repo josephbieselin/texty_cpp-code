@@ -3,45 +3,85 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>	// provide stat functionality for directory checking
-#include <sys/types.h>	// 
 #include <string.h>		// provide c string capabilities
 #include <unistd.h>		// provide functionality for UNIX calls
 #include <stdlib.h>		// malloc, calloc, free
 
 using namespace std;
 
-#define MAX_PATH 1000
-
-#define USER_DIR "/files"
-
-bool file_exists(const char* name)
-{
-	ifstream fh(name);
-	if (fh.good()) {
-		fh.close();
-		return true;
-	} else {
-		fh.close();
-		return false;
-	}
-}
-
+#define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
+#define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
+#define ALL_USERS_FILE "all_users.txt"	// corresponds to file with every user's info and index number
+#define MAX_INDEX_BYTES 10		// maximum number of user indexes that can be used at creation of files: 10 bytes = 999999999 possible indexes for a cstring
+#define MAX_USER_INFO_BYTES 118	// maximum number of bytes each line in all_users.txt will be for each user including: user's data, commas, and '\n' character
+#define UN_BYTES 17			// maximum number of characters in username based on value limited in PHP file
+#define EMAIL_BYTES 41		// maximum number of characters in email based on value limited in PHP file
+#define PW_BYTES 17			// maximum number of characters in password based on value limited in PHP file
+#define FN_BYTES 21			// maximum number of characters in first name based on value limited in PHP file
+#define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
+#define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
 
 int main() {
 
 
-	char* dir = (char*) malloc(100);
-	//dir = getcwd(dir, MAX_PATH)
-	strcat(getcwd(dir, MAX_PATH), "/files");
-	chdir(dir);
-	const char* name = "test.txt";
-	cout << file_exists(name) << endl;
+	string un = "jb";
+	string email = "joe@g";
+
+	ifstream fh;
+	fh.open("samp.txt");
+	if (!fh.is_open()) {
+		// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
+		cout << endl << "ERROR: could not open all_users.txt" << endl;
+	}
 
 
+	char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+	fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
 
 
+	char* test_un = (char*) malloc(UN_BYTES * sizeof(char));
+	char* test_email = (char*) malloc(EMAIL_BYTES * sizeof(char));
+	char* garbage = (char*) malloc(GARBAGE_BYTES *sizeof(char));
+	
+	// gets up to UN_BYTES characters or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+	fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+	cout << test_un << " ?= " << un << endl;
+	if (strcmp(test_un, un.c_str()) == 0)
+		cout << false << endl;
+	else
+		cout << true << endl;
+
+	// ',' is the next character in the stream, so just get that
+	fh.get(); //garbage, 2);
+
+	// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
+	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+	cout << test_email << " ?= " << email << endl;
+	if (strcmp(test_email, email.c_str()) == 0)
+		cout << false << endl;
+	else
+		cout << true << endl;
+
+	// get the rest of the line until '\n' is reached
+	fh.getline(garbage, GARBAGE_BYTES);
+	cout << garbage << endl;
 
 
+	fh.get(test_un, UN_BYTES, ',');
+	cout << test_un << " ?= " << un << endl;
+	if (strcmp(test_un, un.c_str()) == 0)
+		cout << false << endl;
+	else
+		cout << true << endl;
+
+	fh.get();
+
+	fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+	cout << test_email << " ?= " << email << endl;
+	if (strcmp(test_email, email.c_str()) == 0)
+		cout << false << endl;
+	else
+		cout << true << endl;
 
 
 	// const char* c = "hello";
