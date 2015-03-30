@@ -16,7 +16,7 @@ using namespace std;
 
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
-#define ALL_USERS_FILE "all_users.txt"	// corresponds to file with every user's info and index number
+#define ALL_USERS_FILE "/all_users.txt"	// corresponds to file with every user's info and index number
 #define MAX_INDEX_BYTES 10		// maximum number of user indexes that can be used at creation of files: 10 bytes = 999999999 possible indexes for a cstring
 #define MAX_USER_INFO_BYTES 118	// maximum number of bytes each line in all_users.txt will be for each user including: user's data, commas, and '\n' character
 #define UN_BYTES 17			// maximum number of characters in username based on value limited in PHP file
@@ -25,7 +25,7 @@ using namespace std;
 #define FN_BYTES 21			// maximum number of characters in first name based on value limited in PHP file
 #define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
 #define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
-
+#define CURRENT_DIR "~/Dropbox/Coding/PDC/texty_cpp/"	// directory where C++ files and user file directory is stored
 
 bool is_dir(const char* path)
 {
@@ -35,10 +35,10 @@ bool is_dir(const char* path)
 	if (status == -1) {
 		// If stat does not return 0, there was an error
 		cout << endl << "ERROR: is_dir could not check path" << endl;
-		exit(1);
+		return false;
 	}
 
-	if (buf->st_mode & S_IFDIR == 0)
+	if (buf.st_mode & S_IFDIR == 0)
 		// Directory was not created -- creating "files" directory now
 		return false;
 
@@ -48,23 +48,28 @@ bool is_dir(const char* path)
 // file_exists checks whether the filename passed to it 
 bool file_exists(const char* name)
 {
-	fstream fh(name);
-	if (fh.good()) {
-		fh.close();
-		return true;
-	} else {
-		fh.close();
-		return false;
-	}
+	struct stat buf;
+	int status;
+	status = stat(name, &buf);
+	return status == 0;
+
+	// fstream fh(name);
+	// if (fh.good()) {
+	// 	fh.close();
+	// 	return true;
+	// } else {
+	// 	fh.close();
+	// 	return false;
+	// }
 }
 
 // Create 3 text files in the passed in directory: followees, followers, texts
 void create_user_files(const char* dir)
 {
 	chdir(dir);
-	fstream f1.open("followees.txt"); f1.close();
-	fstream f2.open("followers.txt"); f2.close();
-	fstream f3.open("texts.txt"); f3.close();
+	ofstream f1("followees.txt"); f1.close();
+	ofstream f2("followers.txt"); f2.close();
+	ofstream f3("texts.txt"); f3.close();
 }
 
 // A new user needs to be created
@@ -73,7 +78,7 @@ void create_user_files(const char* dir)
 void create_user_dir(const char* user_index, const char* dir)
 {
 	chdir(dir);
-	status = mkdir(user_index, S_IRWXU|S_IRWXG|S_IRWXO);
+	int status = mkdir(user_index, S_IRWXU|S_IRWXG|S_IRWXO);
 	if (status == -1) {
 		// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED
 		// mkdir was not successful
@@ -123,8 +128,9 @@ bool user_exists(fstream& fh, string& un, string& email)
 
 // register takes in 5 strings: first name, last name, email, username, password
 // register stores those strings in a CSV line in all_users.txt in the directory files
-void register(string& un, string& email, string& pw, string& fn, string& ln)
+void register_user(string& un, string& email, string& pw, string& fn, string& ln, char* my_cwd)
 {
+	chdir(my_cwd); // make sure we are always in the correct directory
 	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
 	char* buf = (char*) malloc(MAX_PATH * sizeof(char));
 	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
@@ -150,9 +156,9 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 
 	chdir(dir_buf); // access data inside USER_DIR directory, so change to that directory
 	// Check if username or email are taken, if not taken {add this new user's info}
-	const char* file_path = (char*) malloc(MAX_PATH * sizeof(char));
-	stcpy(file_path, dir_buf);
-	file_path = strcat(file_path, ALL_USERS_FILE);
+	char* file_path = (char*) malloc(MAX_PATH * sizeof(char));
+	strcpy(file_path, dir_buf);
+	strcat(file_path, ALL_USERS_FILE);
 	/*
 	Structure of all_users.txt:
 	N
@@ -166,9 +172,10 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 
 	if (!file_exists(file_path)) {
 		// If the file doesn't exist, create it
-		fstream fh;
-		fh.open(file_path);
-		if (!fh.is_open()) {
+		ofstream temp_create_file(file_path);
+		temp_create_file.close();
+		fstream fh(file_path);
+		if (!fh.is_open()) { //.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
 			free(buf); free(dir_buf); free(file_path);
@@ -182,8 +189,7 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 			fh.close();
 		}
 	} else { // file does exist
-		fstream fh;
-		fh.open(file_path);
+		fstream fh(file_path);
 		if (!fh.is_open()) {
 			// IMPLEMENT WAY TO PASS BACK TO NETWORK THAT ERROR OCCURRED WITH FILE OPENING
 			free(buf); free(dir_buf); free(file_path);
@@ -192,6 +198,9 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 		} else { // file is opened
 			char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
 			fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+			int next_index;
+			next_index = atoi(index);
+			next_index++;
 
 			if (user_exists(fh, un, email)) {
 				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
@@ -200,11 +209,17 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 				return;
 			} else { // fh got to EOF in user_exists so user does not exist
 				// input the user data into the file stream with comma separation and an EOL character
+				fh.seekp(-1, ios::end);
+				fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
+				
 				string info = un + "," + email + "," + index + "," + pw + "," + fn + "," + ln + '\n';
-				const char* buffer = info.c_str();
-				fh.seekp(0, ios::end); // go to end of file to write user data in string info
-				fh.write(buffer, strlen(buffer));
-				free(buffer);
+				cout << endl << info << endl;
+				// char* buffer = (char*) malloc(MAX_USER_INFO_BYTES * sizeof(char));
+				// strcpy(buffer, info.c_str());
+				// cout << endl << buffer << endl;
+				// fh.seekp(0, ios::end); // go to end of file to write user data in string info
+				// fh.write(buffer, strlen(buffer));
+				// free(buffer);
 			}
 
 			fh.close();
@@ -218,5 +233,28 @@ void register(string& un, string& email, string& pw, string& fn, string& ln)
 
 
 int main() {
+	char* my_cwd = (char*) malloc(MAX_PATH);
+	strcpy(my_cwd, CURRENT_DIR);
+	chdir(my_cwd);
+	getcwd(my_cwd, MAX_PATH);
 
+	string un, e, pw, fn, ln;
+	string un2, e2, pw2, fn2, ln2;
+	string un3, e3, pw3, fn3, ln3;
+	string un4, e4, pw4, fn4, ln4;
+	string un5, e5, pw5, fn5, ln5;
+
+	un = "jb"; e = "jb@g"; pw = "hi"; fn = "j"; ln = "b";
+	un2 = "ld"; e2 = "ld@g"; pw2 = "bye"; fn2 = "l"; ln2 = "d";
+	un3 = "jb"; e3 = "ml@g"; pw3 = "hi"; fn3 = "j"; ln3 = "b";
+	un4 = "ml"; e4 = "ml@g"; pw4 = "yo"; fn4 = "j"; ln4 = "b";
+	un5 = "sh"; e5 = "ld@g"; pw5 = "bark"; fn5 = "s"; ln5 = "h";
+
+	register_user(un, e, pw, fn, ln, my_cwd);
+	register_user(un2, e2, pw2, fn2, ln2, my_cwd);
+	register_user(un3, e3, pw3, fn3, ln3, my_cwd);
+	register_user(un4, e4, pw4, fn4, ln4, my_cwd);
+	register_user(un5, e5, pw5, fn5, ln5, my_cwd);
+
+	free(my_cwd);
 }
