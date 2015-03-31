@@ -148,46 +148,79 @@ bool file_exists(const char* name)
 }
 
 
-
+void write_over_line(fstream& fh, const char* buf)
+{
+	fh.write(buf, strlen(buf));
+	int i = strlen(buf);
+	while (i < MAX_USER_INFO_BYTES - 1) {
+		fh.put(',');
+		i++;
+	}
+}
 
 
 int main() {
+
 	string s;
 	fstream fh("files/all_users.txt");
+	// fh.put('c');
+
 	// while(!fh.eof())
 	// 	getline(fh, s);
 	char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
 	fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
 	
-	while(!fh.eof()) getline(fh,s);
-
-	fh.clear();
-
-
-	int next_index;
-	next_index = atoi(index);
-	next_index++;
-	cout << endl << "Next index: " << next_index << endl;
-
 	string un, e, pw, fn, ln;
-	un = "SHADOW"; e = "ld@g"; pw = "bye"; fn = "l"; ln = "d";
+	un = "joebeastlin"; e = "joeb@g"; pw = "password"; fn = "joe"; ln = "beastlin";
 
-	string info = un + "," + e + "," + index + "," + pw + "," + fn + "," + ln + '\n';
-	const char* buffer = info.c_str();
-	fh.seekp(0, ios::end);
-	fh.write(buffer, strlen(buffer));
-
-
-	cout << endl << endl;
+	string info = un + "," + e + "," + index + "," + pw + "," + fn + "," + ln; //+ '\n';
+	char* buffer = (char*) malloc(MAX_USER_INFO_BYTES);
+	strcpy(buffer, info.c_str());
 
 
-	char* i = (char*) malloc(3);
-	strcpy(i, "2");
-	int i2;
-	i2 = atoi(i);
-	i2++;
-	cout << i2 << endl;
-	free(i);
+	write_over_line(fh, buffer);
+
+	// while(!fh.eof()) getline(fh,s);
+
+	// fh.clear();
+
+
+	// int next_index;
+	// next_index = atoi(index);
+	// next_index++;
+	// char* next_index_str = (char*) malloc(MAX_INDEX_BYTES * sizeof(char));
+	// sprintf(next_index_str, "%d", next_index);
+
+	// cout << endl << "Next index: " << next_index << endl;
+	// fh.seekp(0, ios::beg);
+
+	// //write_over_line(fh, next_index_str);
+
+	// string un, e, pw, fn, ln;
+	// un = "joebeastlin"; e = "joeb@g"; pw = "password"; fn = "joe"; ln = "beastlin";
+
+	// string info = un + "," + e + "," + index + "," + pw + "," + fn + "," + ln; //+ '\n';
+	// char* buffer = (char*) malloc(MAX_USER_INFO_BYTES);
+	// strcpy(buffer, info.c_str());
+	
+	// while (strlen(buffer) < MAX_USER_INFO_BYTES - 1) {
+	// 	strcat(buffer, ",");
+	// }
+	// strcat(buffer, "\n");
+	// fh.seekp(0, ios::end);
+	// fh.write(buffer, MAX_USER_INFO_BYTES);
+
+
+	// cout << endl << endl;
+
+
+	// char* i = (char*) malloc(3);
+	// strcpy(i, "2");
+	// int i2;
+	// i2 = atoi(i);
+	// i2++;
+	// cout << i2 << endl;
+	// free(i);
 
 	// char* my_cwd = (char*) malloc(MAX_PATH);
 	// strcpy(my_cwd, CURRENT_DIR);

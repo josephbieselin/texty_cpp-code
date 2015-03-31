@@ -1,12 +1,49 @@
 /*
 	Texty Web App
-	C++ File Handling
+	Twitter Clone
+
+	Programmer:
+	Joseph Bieselin
+
+	"Database" emulated with C++ file handling
+
+
+	Structure of all_users.txt:
+	N,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+	username,email,index_i,password,firstname,lastname,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+	username,email,index_j,password,firstname,lastname,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+	username,email,index_k,password,firstname,lastname,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+
+	... continues on for however many users are in the file;
+	Where N is index of the next user (this can go to infinity since numbers are not reused after a user deactivates their account);
+	We assume for now that 10 bytes corresponding to the string "999999999" will suffice for 99999999 possible unique user indexes;
+	Each line contains strings representing user info separated by commas;
+	Each line is 118 bytes where commas are put at the end of each line before the newline character so lines can be overwritten after created
+
+
+	Structure of followers.txt & followees.txt:
+	index_i,username,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+	index_j,username,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
+
+	... continues on for however many users are in the file;
+	The user that the person is followed by (follower) or the that is following (followee) has their index and username on a line;
+	Each line is 28 bytes where commas are put at the end of each line before the newline character so lines can be overwritten after created
+
+
+	Structure of texts.txt:
+	This is a samaple texty from some user'\n'
+	This is a second sample from some user'\n'
+
+	The user can input almost any character they want, excluding new lines;
+	New lines delimit the end of one texty from the next;
+	A texty cannot be deleted... ever, unless the account is deactivated
 */
 
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
+
+#include <string>		// Strings will definitely be used
+#include <vector>		// 
+#include <iostream>		// Input and output streams
+#include <fstream>		// C++ file streams
 #include <sys/stat.h>	// provide stat functionality for directory checking
 #include <string.h>		// provide c string capabilities
 #include <unistd.h>		// provide functionality for UNIX calls
@@ -14,6 +51,7 @@
 
 using namespace std;
 
+// GLOBAL CONSTANTS
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 #define ALL_USERS_FILE "/all_users.txt"	// corresponds to file with every user's info and index number
@@ -27,6 +65,7 @@ using namespace std;
 #define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
 #define CURRENT_DIR "~/Dropbox/Coding/PDC/texty_cpp/"	// directory where C++ files and user file directory is stored
 
+// Return true if the passed in cstring is a directory; false otherwise
 bool is_dir(const char* path)
 {
 	struct stat buf;
@@ -45,25 +84,16 @@ bool is_dir(const char* path)
 	return true; // no errors and path was determined to be a directory
 }
 
-// file_exists checks whether the filename passed to it 
+// Return true if the passed in cstring is a file that exists; false otherwise
 bool file_exists(const char* name)
 {
 	struct stat buf;
 	int status;
 	status = stat(name, &buf);
 	return status == 0;
-
-	// fstream fh(name);
-	// if (fh.good()) {
-	// 	fh.close();
-	// 	return true;
-	// } else {
-	// 	fh.close();
-	// 	return false;
-	// }
 }
 
-// Create 3 text files in the passed in directory: followees, followers, texts
+// Create 3 .txt files in the passed in directory: followees, followers, texts
 void create_user_files(const char* dir)
 {
 	chdir(dir);
@@ -72,9 +102,11 @@ void create_user_files(const char* dir)
 	ofstream f3("texts.txt"); f3.close();
 }
 
-// A new user needs to be created
-// Each user has a directory corresponding to their index number
-// Each user's directory has 3 text files: followees, followers, texts
+/*
+A new user needs to be created;
+Each user has a directory corresponding to their index number;
+Each user's directory has 3 .txt files: followees, followers, texts
+*/
 void create_user_dir(const char* user_index, const char* dir)
 {
 	chdir(dir);
@@ -88,7 +120,7 @@ void create_user_dir(const char* user_index, const char* dir)
 		return;
 	}
 	chmod(user_index, S_IRWXU|S_IRWXG|S_IRWXO); // give everyone RWX permissions
-	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
+	char* dir_buf = (char*) malloc(MAX_PATH);
 	strcpy(dir_buf, dir);
 	dir_buf = strcat(dir_buf, "/");
 	dir_buf = strcat(dir_buf, user_index);
@@ -97,34 +129,97 @@ void create_user_dir(const char* user_index, const char* dir)
 	free(dir_buf);
 }
 
-bool user_exists(fstream& fh, string& un, string& email)
+/*
+1) If no password is passed, return true if either un or email match the username or email of a user in all_users.txt (used for registering a new user)
+2) If a password is passed, return true if both un and pw match one user's username and password (used for logging in)
+*/
+bool user_exists(fstream& fh, string& un, string& email, string& pw = NULL)
 {
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
-	char* test_un = (char*) malloc(UN_BYTES * sizeof(char));
-	char* test_email = (char*) malloc(EMAIL_BYTES * sizeof(char));
-	char* garbage = (char*) malloc(GARBAGE_BYTES *sizeof(char));
 
-	while (!fh.eof()) {
-		fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
-		if (strcmp(test_un, un.c_str()) == 0)
-			return true; // the passed in username is equal to a username already created
+	char* test_un = (char*) malloc(UN_BYTES);
+	char* garbage = (char*) malloc(GARBAGE_BYTES);
 
-		// ',' is the next character in the stream, so just get that
-		fh.get(); //garbage, 2);
+	// Testing for registering of a new user: neither the username or email should match a current user
+	if (pw == NULL) { // no password was passed so return true if the username and email are not taken
+		char* test_email = (char*) malloc(EMAIL_BYTES);
 
-		// gets up to EMAIL_BYTES or until ',' is reached --> if ',' reached it is the next character that will be extracted from the stream
-		fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-		if (strcmp(test_email, email.c_str()) == 0) {
-			free(test_un); free(test_email); free(garbage);
-			return true; // the passed in email is equal to an email already created
+		while (!fh.eof()) {
+			// Test username
+			fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+			if (strcmp(test_un, un.c_str()) == 0) {
+				free(test_un); free(test_email); free(garbage);
+				return true; // the passed in username is equal to a username already created
+			}
+
+			// ',' is the next character in the stream, so just get that
+			fh.get(); //garbage, 2);
+
+			// Test email
+			fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+			if (strcmp(test_email, email.c_str()) == 0) {
+				free(test_un); free(test_email); free(garbage);
+				return true; // the passed in email is equal to an email already created
+			}
+			// get the rest of the line until '\n' is reached so fh's stream is pointing at the next user's data
+			fh.getline(garbage, GARBAGE_BYTES);
 		}
-		// get the rest of the line until '\n' is reached
-		fh.getline(garbage, GARBAGE_BYTES);
+		free(test_un); free(test_email); free(garbage);
+		return false; // the username and email passed in were not found
+	} else { // a password was passed so return true if the log in information is correct
+		char* test_pw = (char*) malloc(PW_BYTES);
+
+		while (!fh.eof()) {
+			// Test username and password
+			fh.get(test_un, UN_BYTES, ',');			// comma separated values, so ',' is the delim parameter
+			// ',' is the next character in the stream so just get that
+			fh.get();
+			// Email is the next data field, followed by index, so get those in garbage along with the commas
+			fh.get(garbage, GARBAGE_BYTES, ','); fh.get(); // garbage email and ','
+			fh.get(garbage, GARBAGE_BYTES, ','); fh.get(); // garbage index and ','
+
+			fh.get(test_pw, PW_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
+
+			// Test username and password
+			if ( (strcmp(test_un, un.c_str()) == 0) && (strcmp(test_pw, pw.c_str()) == 0) ) {
+				free(test_un); free(test_pw); free(garbage);
+				return true; // the passed in username and password match a user
+			}
+			// get the rest of the line until '\n' is reached so fh's stream is pointing at the next user's data
+			fh.getline(garbage, GARBAGE_BYTES);
+		}
+		free(test_un); free(test_pw); free(garbage);
+		return false; // the username and password did not match a user
 	}
-	free(test_un); free(test_email); free(garbage);
-	return false; // the username and email passed in were not found
 }
+
+// Write over the current line that the fh stream is pointing to with a new index
+void write_next_index(fstream& fh, string& next_index)
+{
+	fh.seekp(0, ios::beg);
+	for (size_t i = 0; i < (MAX_USER_INFO_BYTES - next_index.size()); ++i)
+		next_index += ",";
+	//next_index += "\n";
+	fh << next_index;
+}
+
+// Takes a file handle and adds the strings of user data to the end of the file with the line structure in the comments at the top
+void add_user(fstream& fh, string& un, string& email, string& index, string& pw, string& fn, string& ln)
+{
+	string user_line = un + "," + email + "," + index, + "," + pw + "," + fn + "," + ln + '\n';
+	// Clear any flag bits that may impede writing to the file, then set the stream to point to the end of the file
+	fh.clear();
+	fh.seekp(0, ios::end);
+	fh << user_line;
+}
+
+// Removes a user from all_users.txt, and corresponding followers and followers .txt files
+void remove_user(fstream& fh, string& un, string& email, string& pw)
+{
+
+}
+
 
 // register takes in 5 strings: first name, last name, email, username, password
 // register stores those strings in a CSV line in all_users.txt in the directory files
@@ -132,10 +227,11 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 {
 	chdir(my_cwd); // make sure we are always in the correct directory
 	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
-	char* buf = (char*) malloc(MAX_PATH * sizeof(char));
-	char* dir_buf = (char*) malloc(MAX_PATH * sizeof(char));
+	char* buf = (char*) malloc(MAX_PATH);
+	char* dir_buf = (char*) malloc(MAX_PATH);
 	buf = getcwd(buf, MAX_PATH);
 	strcpy(dir_buf, buf);
+
 	dir_buf = strcat(dir_buf, USER_DIR);
 
 	if (!is_dir(dir_buf)) {
@@ -156,19 +252,9 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 
 	chdir(dir_buf); // access data inside USER_DIR directory, so change to that directory
 	// Check if username or email are taken, if not taken {add this new user's info}
-	char* file_path = (char*) malloc(MAX_PATH * sizeof(char));
+	char* file_path = (char*) malloc(MAX_PATH);
 	strcpy(file_path, dir_buf);
 	strcat(file_path, ALL_USERS_FILE);
-	/*
-	Structure of all_users.txt:
-	N
-	username,email,index_i,password,firstname,lastname
-	username,email,index_j,password,firstname,lastname
-	username,email,index_k,password,firstname,lastname
-	... continues on for however many users are in the file
-	Where N is index of the next user (this can go to infinity since numbers are not reused after a user deactivates their account)
-	Each line contains strings representing user info separated by commas and ending with the '\n' character
-	*/
 
 	if (!file_exists(file_path)) {
 		// If the file doesn't exist, create it
@@ -180,13 +266,18 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
 			free(buf); free(dir_buf); free(file_path);
 			return;
-		} else {
-			// 1st user created will have an index of 1, which changes N to 2 for the next user to register
-			fh << "2" << '\n';
-			fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
+		} else { // 1st user created will have an index of 1, which changes N to 2 for the next user to register
+			// The first line of the file is the index number that the next registered user will receieve, ie: 2
+			string index_line = "2";
+			for(size_t i = 1; i < MAX_USER_INFO_BYTES - 1; ++i)
+				index_line += ",";
+			index_line += "\n";
+			f << index_line; // Each line is 118 chars long, with commands appending user data to set a standard line length, and ends with a new-line char
+
+			// Add this new user's info to the end of the all_users.txt file
+			add_user(fh, un, email, "1", pw, fn, ln);
 			// Create the new user's directory and followees.txt, followers.txt, texts.txt files
 			create_user_dir("1", dir_buf);
-			fh.close();
 		}
 	} else { // file does exist
 		fstream fh(file_path);
@@ -196,11 +287,13 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 			cout << endl << "ERROR: could not open all_users.txt" << endl;
 			return;
 		} else { // file is opened
-			char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-			fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
-			int next_index;
-			next_index = atoi(index);
-			next_index++;
+			char* index = (char*) malloc(MAX_INDEX_BYTES); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+			fh.getline(index, MAX_INDEX_BYTES, ','); // index will get the first line in the file which contains a number followed by the EOL character
+			// The file stream will point to excess commas, so ignore those garbage values
+			// char* garbage = (char*) malloc(MAX_USER_INFO_BYTES);
+			// fh.getline(garbage, MAX_USER_INFO_BYTES);
+			int end_of_line = (int)'\n';
+			fh.ignore(MAX_USER_INFO_BYTES, end_of_line);
 
 			if (user_exists(fh, un, email)) {
 				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
@@ -208,19 +301,17 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 				cout << endl << "ERROR: username or email already exist" << endl;
 				return;
 			} else { // fh got to EOF in user_exists so user does not exist
-				// input the user data into the file stream with comma separation and an EOL character
-				fh.seekp(-1, ios::end);
-				fh << un << "," << email << "," << "1" << "," << pw << "," << fn << "," << ln << '\n';
-				
-				string info = un + "," + email + "," + index + "," + pw + "," + fn + "," + ln + '\n';
-				cout << endl << info << endl;
-				// char* buffer = (char*) malloc(MAX_USER_INFO_BYTES * sizeof(char));
-				// strcpy(buffer, info.c_str());
-				// cout << endl << buffer << endl;
-				// fh.seekp(0, ios::end); // go to end of file to write user data in string info
-				// fh.write(buffer, strlen(buffer));
-				// free(buffer);
+				// Add this new user's info to the end of the all_users.txt file
+				add_user(fh, un, email, index, pw, fn, ln);
+				// Create the new user's directory and followees.txt, followers.txt, texts.txt files
+				create_user_dir(index, dir_buf);
 			}
+
+			// The index at the beginning of all_users.txt must be incremented and updated in the file
+			int next_index;
+			next_index = atoi(index);
+			next_index++;
+			write_next_index(fh, next_index.to_string()); // write_next_index will move the stream to the beginning of the file
 
 			fh.close();
 			free(index);
@@ -228,7 +319,7 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 	}
 
 	chdir(buf); // change the CWD back to its initial position at the beginning of the function
-	free(buf); free(dir_buf); free(file_path);
+	free(buf), free(dir_buf), free(file_path);
 }
 
 
