@@ -130,68 +130,68 @@ void create_user_dir(const char* user_index, const char* dir)
 }
 
 /*
+The parameter check will be used in a switch statement and do one of the following 3 checks
 1) If no password is passed, return true if either un or email match the username or email of a user in all_users.txt (used for registering a new user)
 2) If a password is passed, return true if both un and pw match one user's username and password (used for logging in)
+3) Return true if un, email, and pw all match one user's username, email, and password (used for deactivating a user)
 */
-bool user_exists(fstream& fh, const string& un, const string& email, const string& pw = "")
+bool user_exists(fstream& fh, int check, const string& un, const string& email, const string& pw = "")
 {
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
 
 	char* test_un = (char*) malloc(UN_BYTES);
+	char* test_email = (char*) malloc(EMAIL_BYTES);
+	char* test_pw = (char*) malloc(PW_BYTES);
+
 	char* garbage = (char*) malloc(GARBAGE_BYTES);
 
-	// Testing for registering of a new user: neither the username or email should match a current user
-	if (pw == "") { // no password was passed so return true if the username and email are not taken
-		char* test_email = (char*) malloc(EMAIL_BYTES);
 
-		while (!fh.eof()) {
-			// Test username
-			fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
-			if (strcmp(test_un, un.c_str()) == 0) {
-				free(test_un); free(test_email); free(garbage);
-				return true; // the passed in username is equal to a username already created
-			}
+	while (!fh.eof()) {
+		// Test username
+		fh.get(test_un, UN_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
 
-			// ',' is the next character in the stream, so just get that
-			fh.get(); //garbage, 2);
+		// ',' is the next character in the stream, so just get that
+		fh.get();
 
-			// Test email
-			fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
-			if (strcmp(test_email, email.c_str()) == 0) {
-				free(test_un); free(test_email); free(garbage);
-				return true; // the passed in email is equal to an email already created
-			}
-			// get the rest of the line until '\n' is reached so fh's stream is pointing at the next user's data
-			fh.getline(garbage, GARBAGE_BYTES);
+		fh.get(test_email, EMAIL_BYTES, ','); 	// comma separated values, so ',' is the delim parameter
+
+		// ',' is the next character in the stream, so just get that
+		fh.get();
+
+		// garbage and .get() will get the index value of the user and the following ','
+		fh.get(garbage, GARBAGE_BYTES, ',');
+		fh.get();
+
+		fh.get(test_pw, PW_BYTES, ',');			// comma separated values, so ',' is the delim parameter
+
+		// garbage and .get() will get the next ',' along with the rest of the user info that is not need for testing 
+		fh.get(); //garbage, 2);
+		fh.getline(garbage, GARBAGE_BYTES);
+
+		// 1) test username or email, 2) test username and password, 3) test username, email, and password
+		switch (check)
+		{
+			case 1: // Register: both the username and email should be unique
+				if( (strcmp(test_un, un.c_str()) == 0) || (strcmp(test_email, email.c_str()) == 0)  ) {
+					free(test_un); free(test_email); free(test_pw); free(garbage);
+					return true;
+				}
+			case 2: // Log in: both the username and password should match
+				if( (strcmp(test_un, un.c_str()) == 0) && (strcmp(test_pw, pw.c_str()) == 0) ) {
+					free(test_un); free(test_email); free(test_pw); free(garbage);
+					return true;
+				}
+			case 3: // Deactivate: the username, email, and password should match
+				if( (strcmp(test_un, un.c_str()) == 0) && (strcmp(test_email, email.c_str()) == 0) && (strcmp(test_pw, pw.c_str()) == 0) ) {
+					free(test_un); free(test_email); free(test_pw); free(garbage);
+					return true;
+				}
 		}
-		free(test_un); free(test_email); free(garbage);
-		return false; // the username and email passed in were not found
-	} else { // a password was passed so return true if the log in information is correct
-		char* test_pw = (char*) malloc(PW_BYTES);
-
-		while (!fh.eof()) {
-			// Test username and password
-			fh.get(test_un, UN_BYTES, ',');			// comma separated values, so ',' is the delim parameter
-			// ',' is the next character in the stream so just get that
-			fh.get();
-			// Email is the next data field, followed by index, so get those in garbage along with the commas
-			fh.get(garbage, GARBAGE_BYTES, ','); fh.get(); // garbage email and ','
-			fh.get(garbage, GARBAGE_BYTES, ','); fh.get(); // garbage index and ','
-
-			fh.get(test_pw, PW_BYTES, ','); 		// comma separated values, so ',' is the delim parameter
-
-			// Test username and password
-			if ( (strcmp(test_un, un.c_str()) == 0) && (strcmp(test_pw, pw.c_str()) == 0) ) {
-				free(test_un); free(test_pw); free(garbage);
-				return true; // the passed in username and password match a user
-			}
-			// get the rest of the line until '\n' is reached so fh's stream is pointing at the next user's data
-			fh.getline(garbage, GARBAGE_BYTES);
-		}
-		free(test_un); free(test_pw); free(garbage);
-		return false; // the username and password did not match a user
 	}
+
+	free(test_un); free(test_email); free(test_pw); free(garbage);
+	return false; // got to the end of the file so return false
 }
 
 // Write over the current line that the fh stream is pointing to with a new index
@@ -214,10 +214,35 @@ void add_user(fstream& fh, const string& un, const string& email, const string& 
 	fh << user_line;
 }
 
-// Removes a user from all_users.txt, and corresponding followers and followers .txt files
-void remove_user(fstream& fh, const string& un, const string& email, const string& pw)
+/*
+Remove the user from all_users.txt
+Remove the user from the followees.txt file of anyone in the user's followers.txt file
+Remove the user from the followers.txt file of anyone in the user's followees.txt file
+Delete the user's followees.txt, followers.txt, and texts.txt files and the user's directory
+*/
+void remove_user_from_files()
 {
 
+}
+
+/*
+Check if the passed in user data matches an existing user
+If yes, remove the user from all_users.txt, and corresponding followers and followees .txt files
+	Also remove the user's indexed directory and files and return true
+If no, return false
+*/
+bool remove_user(fstream& fh, const string& un, const string& email, const string& index, const string& pw)
+{
+	string garbage;
+	// Reset any of the files flags and have the file stream pointing to the second line of all_users.txt
+	fh.clear(); fh.seekp(0, ios::beg); getline(fh, garbage);
+
+	if (user_exists(fh, 3, un, email, pw)) {
+		remove_user_from_files()
+		return true;
+	}
+	else
+		return false;
 }
 
 
@@ -296,7 +321,7 @@ void register_user(string& un, const string& email, const string& pw, const stri
 			int end_of_line = (int)'\n';
 			fh.ignore(MAX_USER_INFO_BYTES, end_of_line);
 
-			if (user_exists(fh, un, email)) {
+			if (user_exists(fh, 1, un, email)) {
 				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
 				free(buf); free(dir_buf); free(file_path); free(index);
 				cout << endl << "ERROR: username or email already exist" << endl;
