@@ -133,7 +133,7 @@ void create_user_dir(const char* user_index, const char* dir)
 1) If no password is passed, return true if either un or email match the username or email of a user in all_users.txt (used for registering a new user)
 2) If a password is passed, return true if both un and pw match one user's username and password (used for logging in)
 */
-bool user_exists(fstream& fh, string& un, string& email, string& pw = NULL)
+bool user_exists(fstream& fh, const string& un, const string& email, const string& pw = "")
 {
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
@@ -142,7 +142,7 @@ bool user_exists(fstream& fh, string& un, string& email, string& pw = NULL)
 	char* garbage = (char*) malloc(GARBAGE_BYTES);
 
 	// Testing for registering of a new user: neither the username or email should match a current user
-	if (pw == NULL) { // no password was passed so return true if the username and email are not taken
+	if (pw == "") { // no password was passed so return true if the username and email are not taken
 		char* test_email = (char*) malloc(EMAIL_BYTES);
 
 		while (!fh.eof()) {
@@ -205,9 +205,9 @@ void write_next_index(fstream& fh, string& next_index)
 }
 
 // Takes a file handle and adds the strings of user data to the end of the file with the line structure in the comments at the top
-void add_user(fstream& fh, string& un, string& email, string& index, string& pw, string& fn, string& ln)
+void add_user(fstream& fh, const string& un, const string& email, const string& index, const string& pw, const string& fn, const string& ln)
 {
-	string user_line = un + "," + email + "," + index, + "," + pw + "," + fn + "," + ln + '\n';
+	string user_line = un + "," + email + "," + index + "," + pw + "," + fn + "," + ln + '\n';
 	// Clear any flag bits that may impede writing to the file, then set the stream to point to the end of the file
 	fh.clear();
 	fh.seekp(0, ios::end);
@@ -215,7 +215,7 @@ void add_user(fstream& fh, string& un, string& email, string& index, string& pw,
 }
 
 // Removes a user from all_users.txt, and corresponding followers and followers .txt files
-void remove_user(fstream& fh, string& un, string& email, string& pw)
+void remove_user(fstream& fh, const string& un, const string& email, const string& pw)
 {
 
 }
@@ -223,7 +223,7 @@ void remove_user(fstream& fh, string& un, string& email, string& pw)
 
 // register takes in 5 strings: first name, last name, email, username, password
 // register stores those strings in a CSV line in all_users.txt in the directory files
-void register_user(string& un, string& email, string& pw, string& fn, string& ln, char* my_cwd)
+void register_user(string& un, const string& email, const string& pw, const string& fn, const string& ln, char* my_cwd)
 {
 	chdir(my_cwd); // make sure we are always in the correct directory
 	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
@@ -272,10 +272,11 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 			for(size_t i = 1; i < MAX_USER_INFO_BYTES - 1; ++i)
 				index_line += ",";
 			index_line += "\n";
-			f << index_line; // Each line is 118 chars long, with commands appending user data to set a standard line length, and ends with a new-line char
+			fh << index_line; // Each line is 118 chars long, with commands appending user data to set a standard line length, and ends with a new-line char
 
+			string index_1 = "1";
 			// Add this new user's info to the end of the all_users.txt file
-			add_user(fh, un, email, "1", pw, fn, ln);
+			add_user(fh, un, email, index_1, pw, fn, ln);
 			// Create the new user's directory and followees.txt, followers.txt, texts.txt files
 			create_user_dir("1", dir_buf);
 		}
@@ -311,7 +312,11 @@ void register_user(string& un, string& email, string& pw, string& fn, string& ln
 			int next_index;
 			next_index = atoi(index);
 			next_index++;
-			write_next_index(fh, next_index.to_string()); // write_next_index will move the stream to the beginning of the file
+			// Convert the next_index int value into a string to pass to write_next_index
+			char next_index_buffer[MAX_INDEX_BYTES];
+			sprintf(next_index_buffer, "%d", next_index);
+			string next_index_string(next_index_buffer);
+			write_next_index(fh, next_index_string); // write_next_index will move the stream to the beginning of the file
 
 			fh.close();
 			free(index);
@@ -329,23 +334,34 @@ int main() {
 	chdir(my_cwd);
 	getcwd(my_cwd, MAX_PATH);
 
-	string un, e, pw, fn, ln;
-	string un2, e2, pw2, fn2, ln2;
-	string un3, e3, pw3, fn3, ln3;
-	string un4, e4, pw4, fn4, ln4;
-	string un5, e5, pw5, fn5, ln5;
 
-	un = "jb"; e = "jb@g"; pw = "hi"; fn = "j"; ln = "b";
-	un2 = "ld"; e2 = "ld@g"; pw2 = "bye"; fn2 = "l"; ln2 = "d";
-	un3 = "jb"; e3 = "ml@g"; pw3 = "hi"; fn3 = "j"; ln3 = "b";
-	un4 = "ml"; e4 = "ml@g"; pw4 = "yo"; fn4 = "j"; ln4 = "b";
-	un5 = "sh"; e5 = "ld@g"; pw5 = "bark"; fn5 = "s"; ln5 = "h";
 
-	register_user(un, e, pw, fn, ln, my_cwd);
-	register_user(un2, e2, pw2, fn2, ln2, my_cwd);
-	register_user(un3, e3, pw3, fn3, ln3, my_cwd);
-	register_user(un4, e4, pw4, fn4, ln4, my_cwd);
-	register_user(un5, e5, pw5, fn5, ln5, my_cwd);
+
+
+
+
+
+
+
+
+
+	// string un, e, pw, fn, ln;
+	// string un2, e2, pw2, fn2, ln2;
+	// string un3, e3, pw3, fn3, ln3;
+	// string un4, e4, pw4, fn4, ln4;
+	// string un5, e5, pw5, fn5, ln5;
+
+	// un = "jb"; e = "jb@g"; pw = "hi"; fn = "j"; ln = "b";
+	// un2 = "ld"; e2 = "ld@g"; pw2 = "bye"; fn2 = "l"; ln2 = "d";
+	// un3 = "jb"; e3 = "ml@g"; pw3 = "hi"; fn3 = "j"; ln3 = "b";
+	// un4 = "ml"; e4 = "ml@g"; pw4 = "yo"; fn4 = "j"; ln4 = "b";
+	// un5 = "sh"; e5 = "ld@g"; pw5 = "bark"; fn5 = "s"; ln5 = "h";
+
+	// register_user(un, e, pw, fn, ln, my_cwd);
+	// register_user(un2, e2, pw2, fn2, ln2, my_cwd);
+	// register_user(un3, e3, pw3, fn3, ln3, my_cwd);
+	// register_user(un4, e4, pw4, fn4, ln4, my_cwd);
+	// register_user(un5, e5, pw5, fn5, ln5, my_cwd);
 
 	free(my_cwd);
 }
