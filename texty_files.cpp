@@ -5,9 +5,10 @@
 	Programmer:
 	Joseph Bieselin
 
+	Networking code interfaces PHP on user machine with a server running C++ code
 	"Database" emulated with C++ file handling
 
-
+	
 	Structure of all_users.txt:
 	N,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
 	username,email,index_i,password,firstname,lastname,,,,,,,,,,,,,,,,,,,,,,,,,,,,,'\n'
@@ -40,21 +41,23 @@
 */
 
 
-#include <string>		// Strings will definitely be used
-#include <vector>		// 
-#include <iostream>		// Input and output streams
-#include <fstream>		// C++ file streams
+#include <string>
+#include <vector>
+#include <iostream>
+#include <fstream>
 #include <sys/stat.h>	// provide stat functionality for directory checking
 #include <string.h>		// provide c string capabilities
 #include <unistd.h>		// provide functionality for UNIX calls
 #include <stdlib.h>		// malloc, calloc, free
+#include <typeinfo>
 
 using namespace std;
 
-// GLOBAL CONSTANTS
+/* ---------------------------------- CONSTANTS ----------------------------------------------*/
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 #define ALL_USERS_FILE "/all_users.txt"	// corresponds to file with every user's info and index number
+#define USER_DATA_FILENAME "all_users.txt"
 #define MAX_INDEX_BYTES 10		// maximum number of user indexes that can be used at creation of files: 10 bytes = 999999999 possible indexes for a cstring
 #define MAX_USER_INFO_BYTES 118	// maximum number of bytes each line in all_users.txt will be for each user including: user's data, commas, and '\n' character
 #define UN_BYTES 17			// maximum number of characters in username based on value limited in PHP file
@@ -64,6 +67,8 @@ using namespace std;
 #define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
 #define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
 #define CURRENT_DIR "~/Dropbox/Coding/PDC/texty_cpp/"	// directory where C++ files and user file directory is stored
+/* ---------------------------------- CONSTANTS ----------------------------------------------*/
+
 
 // Return true if the passed in cstring is a directory; false otherwise
 bool is_dir(const char* path)
@@ -219,36 +224,178 @@ void add_user(fstream& fh, const string& un, const string& email, const string& 
 }
 
 /*
+The file passed in will be the followees.txt or followers.txt file containing the user we want to remove;
+The index corresponds to the index of the user we will be removing
+*/
+void remove_user_from_files(fstream& fh, ofstream& temp_file, const string& index)
+{
+	string temp, temp_index;
+	while (!fh.eof()) {
+		// go through each line getting the index for each user
+		getline(fh, temp);
+		for (size_t i = 0; i < temp.size(); ++i) {
+			if (temp[i] == ',')
+				break;
+			temp_index += temp[i];
+		}
+
+		// if the current line's index is not the user we are removing, add them to the new temp file
+		if (temp_index != index && temp != "") {
+			temp_file << temp;
+			temp_file << "\n";
+		}
+
+		temp_index.clear();
+	}
+}
+
+/*
 Remove the user from all_users.txt
 Remove the user from the followees.txt file of anyone in the user's followers.txt file
 Remove the user from the followers.txt file of anyone in the user's followees.txt file
 Delete the user's followees.txt, followers.txt, and texts.txt files and the user's directory
 */
-void remove_user_from_files()
+void remove_user(fstream& fh, ofstream& temp_file, const string& un, const string& email, const string& pw, const char* my_cwd)
 {
+	string user_index;
+	/* ---------------------------- REMOVING USER FROM all_users.txt --------------------------------- */
+	string temp, temp_username;
+	// place the first line of all_users.txt into the new temp file
+	fh.clear(); fh.seekp(0, ios::beg);
+	getline(fh, temp);
+	temp_file << temp; temp_file << "\n";
 
-}
+	// add all lines of all_users.txt that don't match the specified username into the new temp file
+	while (!fh.eof()) {
+		getline(fh, temp);
+		size_t i;
+		for (i = 0; i < temp.size(); ++i) {
+			if (temp[i] == ',')
+				break;
+			temp_username += temp[i];
+		}
 
-/*
-Check if the passed in user data matches an existing user
-If yes, remove the user from all_users.txt, and corresponding followers and followees .txt files
-	Also remove the user's indexed directory and files and return true
-If no, return false
-*/
-bool remove_user(fstream& fh, const string& un, const string& email, const string& index, const string& pw)
-{
-	if (user_exists(fh, 3, un, email, pw)) {
-		remove_user_from_files()
-		return true;
+		// if the current line's user is the not the user we are removing, add them to the new temp file
+		if (temp_username != un && temp != "") {
+			temp_file << temp;
+			temp_file << "\n";
+		} else if (temp_username == un) { // this is the user we are removing
+			// get user's index
+			// first we must parse through the next data value which is the email and i is already at the index of email's first char
+			for (++i; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					break;
+			}
+			// get user's index value until the next comma is hit
+			for (++i; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					break;
+				user_index += temp[i];
+			}
+		}
+
+		temp_username.clear();
 	}
-	else
-		return false;
+	fh.close();
+
+	/* ---------- REMOVING USER FROM OTHER PEOPLE'S followers.txt && followees.txt files ------------- */
+	// set up variables to change directories, assuming our CWD is where the "files" directory is located
+	char* files_cwd = (char*) malloc(MAX_PATH);		// will hold directory of "/files"
+	char* user_dir_cwd = (char*) malloc(MAX_PATH);	// will hold directory of "/files/X" where X is a number representing this user's directory
+	char* other_user_dir_cwd = (char*) malloc(MAX_PATH); 	// will hold directory of "/files/Y" where Y is a number representing another user's directory
+	char* temp_dir = (char*) malloc(MAX_PATH);				// will hold directory of "/files/" as a way to use strcpy to reset other_user_dir_cwd for each new other user's index value
+	getcwd(files_cwd, MAX_PATH);
+	// Change the current directory to the user's directory who is being removed and set up cstrings to be used
+	getcwd(user_dir_cwd, MAX_PATH);
+	strcat(user_dir_cwd, "/");
+	strcat(user_dir_cwd, user_index.c_str());
+	getcwd(other_user_dir_cwd, MAX_PATH);
+	strcat(other_user_dir_cwd, "/");
+	getcwd(temp_dir, MAX_PATH);
+	strcat(temp_dir, "/");
+	chdir(user_dir_cwd);
+	// delete the user's texts.txt file
+	remove("texts.txt");
+	// for each other user in this user's followees.txt file, remove this user from the other user's followers.txt file
+	fstream followees_file("followees.txt");
+	string other_user_index;
+	while (!followees_file.eof()) {
+		// go through each user in the followees.txt file
+		getline(followees_file, temp);
+		if (temp != "") {
+			// get the other user's index value from the followees.txt file
+			for (size_t i = 0; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					break;
+				other_user_index += temp[i];
+			}
+			// change to the directory to the other user's directory and open their followers.txt file
+			strcat(other_user_dir_cwd, other_user_index.c_str());
+			chdir(other_user_dir_cwd);
+			fstream other_followers_file("followers.txt");
+			ofstream other_followers_temp_file("temp.txt");
+			// remove the current user from the other user's followers.txt file
+			remove_user_from_files(other_followers_file, other_followers_temp_file, user_index);
+			// remove the old file with the user currently in it, and rename the new temp file to its name
+			remove("followers.txt");
+			rename("temp.txt", "followers.txt");
+			other_followers_file.close(); other_followers_temp_file.close();
+			other_user_index.clear();
+			// reset other_user_dir_cwd to be concatenated with the next other user index
+			strcpy(other_user_dir_cwd, temp_dir);
+		}
+	}
+	followees_file.close();
+
+	chdir(user_dir_cwd);	// change directories back to the current user being removed to get his/her followers.txt file
+
+	// for each other user in this user's followers.txt file, remove this user from the other user's followees.txt file
+	fstream followers_file("followers.txt");
+	while (!followers_file.eof()) {
+		// go through each user in the followers.txt file
+		getline(followers_file, temp);
+		if (temp != "") {
+			// Get the other user's index value from the followers.txt file
+			for (size_t j = 0; j < temp.size(); ++j) {
+				if( temp[j] == ',')
+					break;
+				other_user_index += temp[j];
+			}
+			// change to the directory to the other user's directory and open their followers.txt file
+			strcat(other_user_dir_cwd, other_user_index.c_str());
+			chdir(other_user_dir_cwd);
+			fstream other_followees_file("followees.txt");
+			ofstream other_followees_temp_file("temp.txt");
+			// remove the current user from the other user's followers.txt file
+			remove_user_from_files(other_followees_file, other_followees_temp_file, user_index);
+			// remove the old file with the user currently in it, and rename the new temp file to its name
+			remove("followees.txt");
+			rename("temp.txt", "followees.txt");
+			other_followees_file.close(); other_followees_temp_file.close();
+			other_user_index.clear();
+			// reset other_user_dir_cwd to be concatenated with the next other user index
+			strcpy(other_user_dir_cwd, temp_dir);
+		}
+	}
+	followers_file.close();
+
+	chdir(user_dir_cwd);
+
+	// For the user being removed, delete his/her files
+	remove("followees.txt");
+	remove("followers.txt");
+
+	chdir(my_cwd); // setting the working directory back to what it was before the remove_user function was called
+	// For the user being removed, delete his/her directory
+	rmdir(user_dir_cwd);
+
+	free(files_cwd); free(user_dir_cwd); free(other_user_dir_cwd); free(temp_dir);
 }
 
 
 // register takes in 5 strings: first name, last name, email, username, password
 // register stores those strings in a CSV line in all_users.txt in the directory files
-void register_user(string& un, const string& email, const string& pw, const string& fn, const string& ln, char* my_cwd)
+void register_user(const string& un, const string& email, const string& pw, const string& fn, const string& ln, char* my_cwd)
 {
 	chdir(my_cwd); // make sure we are always in the correct directory
 	// buf = current working directory; dir_buf = "CWD" + "USER_DIR" (USER_DIR is directory with all users of texty data)
@@ -297,7 +444,7 @@ void register_user(string& un, const string& email, const string& pw, const stri
 			for(size_t i = 1; i < MAX_USER_INFO_BYTES - 1; ++i)
 				index_line += ",";
 			index_line += "\n";
-			fh << index_line; // Each line is 118 chars long, with commands appending user data to set a standard line length, and ends with a new-line char
+			fh << index_line; // Each line is 118 chars long, with commands appending user data to set a standard line length, and ends with a newline char
 
 			string index_1 = "1";
 			// Add this new user's info to the end of the all_users.txt file
@@ -347,16 +494,143 @@ void register_user(string& un, const string& email, const string& pw, const stri
 	free(buf), free(dir_buf), free(file_path);
 }
 
+// Takes a username (that is already known to exist) and returns the index of that user
+string get_user_index(const string& un)
+{
+	string temp, temp_username, user_index;
+	fstream fh(USER_DATA_FILENAME); // open the file with every stored user's info
+	getline(fh, temp); // index line
+
+	while (!fh.eof()) {
+		getline(fh, temp);
+		// index is preceded by a username then a ',' then an email then another ','
+		for (size_t i = 0; i < temp.size(); ++i) {
+			if (temp[i] == ',')
+				break;
+			temp_username += temp[i];
+		}
+
+		// if the current line's user is the one we're looking for, get the index and return it
+		if (temp_username == un) {
+			fh.close(); // close the file since we found the index
+			// parse through the email chars to get to the index
+			for (++i; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					break;
+			}
+			// get the index value and return it
+			for (++i; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					return user_index;
+				user_index += temp[i];
+			}
+		}
+
+		temp_username.clear(); 
+	}
+}
+
+// Takes a message and appends it (along with a newline character) to the user's texts.txt file
+void submit_text(const string& texty, const string& un, char* files_cwd)
+{
+	chdir(files_cwd); // Change into the files directory
+	string user_index = get_user_index(un);
+	// change into the user's directory and open the texts.txt file
+	char* user_dir = (char*) malloc(MAX_PATH);
+	getcwd(user_dir, MAX_PATH);
+	strcat(user_dir, "/");
+	strcat(user_dir, user_index);
+	fstream fh("texts.txt");
+	// write the texty to the end of the texts.txt file
+	fh.seekp(0, ios::end);
+	fh << texty;
+	fh << "\n";
+	fh.close();
+
+	chdir(files_cwd);
+
+	free (user_dir);
+}
+
+// Content for viewing another user's texty homepage
+void other_user_page(const string& un, const string& other_un, char* files_cwd)
+{
+
+}
+
+/*
+Search for the username or email of another user:
+Return formatted user data in a string if the username/email is found: string = "username,email,firstname,lastname"
+Return an empty string, "", if the username/email is not found
+*/
+string search(const string& search_str, char* files_cwd)
+{
+	// change into the files directory and open the file with all of the users' data
+	chdir(files_cwd);
+	fstream fh(USER_DATA_FILENAME);
+	// skip the first of the line of the file because it does not contain user info
+	string first_line_garbage;
+	getline(fh, first_line_garbage);
+
+	string test_un, test_email, user_data, return_user_data;
+
+	while (!fh.eof()) {
+		// get the next line of one user's data
+		getline(fh, user_data);
+		if (user_data != "") {
+			size_t i;
+			// get the username to test
+			for (i = 0; i < user_data.size(); ++i) {
+				if (user_data[i] == ',')
+					break;
+				test_un += user_data[i];
+			}
+			// get the email to test
+			for (++i; i < user_data.size(); ++i) {
+				if (user_data[i] == ',')
+					break;
+				test_email += user_data[i];
+			}
+
+			// if the username or email match, get the first and last name to display also
+			if ( (test_un == search_str) || (test_email == search_str) ) {
+				fh.close(); // close the file since we have all the data needed
+				// get the index but don't store it
+				for (++i; i < user_data.size(); ++i) {
+					if (user_data[i] == ',')
+						break;
+				}
+				// get the password but don't store it
+				for (++i; i < user_data.size(); ++i) {
+					if (user_data[i] == ',')
+						break;
+				}
+				// put the username, email, first name, and last name into a comma separted string
+				return_user_data = test_un + "," + test_email + ",";
+				for (++i; i < user_data.size(); ++i) {
+					return_user_data += user_data[i];
+				}
+
+				return return_user_data; // return the formatted user data: username,email,firstname,lastname
+			}
+		}
+		test_un.clear(); test_email.clear();
+	}
+
+	fh.close();
+	chdir(files_cwd);
+	return ""; // return an empty string since no username/email matched
+}
 
 int main() {
 	char* my_cwd = (char*) malloc(MAX_PATH);
-	strcpy(my_cwd, CURRENT_DIR);
-	chdir(my_cwd);
+	chdir(CURRENT_DIR);
 	getcwd(my_cwd, MAX_PATH);
-
-
-
-
+	// All files and data are stored in the directory files, so make that the current directory
+	char* files_cwd = (char*) malloc(MAX_PATH);
+	getcwd(files_cwd, MAX_PATH);
+	strcat(files_cwd, USER_DIR);
+	chdir(files_cwd);
 
 
 
@@ -382,7 +656,7 @@ int main() {
 	// register_user(un3, e3, pw3, fn3, ln3, my_cwd);
 	// register_user(un4, e4, pw4, fn4, ln4, my_cwd);
 	// register_user(un5, e5, pw5, fn5, ln5, my_cwd);
-
+	chdir(my_cwd);
 	free(my_cwd);
 }
 
@@ -390,7 +664,7 @@ int main() {
 
 void usingRemoveUser()
 {
-		chdir(CURRENT_DIR);
+	chdir(CURRENT_DIR);
 	string un, email, pw, garbage;
 	un = "ld"; email = "ld@g"; pw = "bye";
 

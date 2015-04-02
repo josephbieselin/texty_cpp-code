@@ -1,3 +1,4 @@
+
 #include <string>
 #include <vector>
 #include <iostream>
@@ -6,12 +7,15 @@
 #include <string.h>		// provide c string capabilities
 #include <unistd.h>		// provide functionality for UNIX calls
 #include <stdlib.h>		// malloc, calloc, free
+#include <typeinfo>
 
 using namespace std;
 
+/* ---------------------------------- CONSTANTS ----------------------------------------------*/
 #define MAX_PATH 1000		// maximum file path is probably not more than 1000 chars
 #define USER_DIR "/files"	// directory (relative to CWD) where data on all users for texty will be stored
 #define ALL_USERS_FILE "/all_users.txt"	// corresponds to file with every user's info and index number
+#define USER_DATA_FILENAME "all_users.txt"
 #define MAX_INDEX_BYTES 10		// maximum number of user indexes that can be used at creation of files: 10 bytes = 999999999 possible indexes for a cstring
 #define MAX_USER_INFO_BYTES 118	// maximum number of bytes each line in all_users.txt will be for each user including: user's data, commas, and '\n' character
 #define UN_BYTES 17			// maximum number of characters in username based on value limited in PHP file
@@ -21,7 +25,7 @@ using namespace std;
 #define LN_BYTES 21			// maximum number of characters in last name based on value limited in PHP file
 #define GARBAGE_BYTES 70	// length of bytes to hold characters after username and email fields in file handling
 #define CURRENT_DIR "~/Dropbox/Coding/PDC/texty_cpp/"	// directory where C++ files and user file directory is stored
-
+/* ---------------------------------- CONSTANTS ----------------------------------------------*/
 
 // // Copy a file
 // #include <fstream>      // std::ifstream, std::ofstream
@@ -159,26 +163,98 @@ void write_over_line(fstream& fh, const char* buf)
 }
 
 
+
+string search(const string& search_str, char* files_cwd)
+{
+	// change into the files directory and open the file with all of the users' data
+	chdir(files_cwd);
+	fstream fh(USER_DATA_FILENAME);
+	// skip the first of the line of the file because it does not contain user info
+	string first_line_garbage;
+	getline(fh, first_line_garbage);
+
+	string test_un, test_email, user_data, return_user_data;
+
+	while (!fh.eof()) {
+		// get the next line of one user's data
+		getline(fh, user_data);
+		if (user_data != "") {
+			size_t i;
+			// get the username to test
+			for (i = 0; i < user_data.size(); ++i) {
+				if (user_data[i] == ',')
+					break;
+				test_un += user_data[i];
+			}
+			// get the email to test
+			for (++i; i < user_data.size(); ++i) {
+				if (user_data[i] == ',')
+					break;
+				test_email += user_data[i];
+			}
+
+			// if the username or email match, get the first and last name to display also
+			if ( (test_un == search_str) || (test_email == search_str) ) {
+				fh.close(); // close the file since we have all the data needed
+				// get the index but don't store it
+				for (++i; i < user_data.size(); ++i) {
+					if (user_data[i] == ',')
+						break;
+				}
+				// get the password but don't store it
+				for (++i; i < user_data.size(); ++i) {
+					if (user_data[i] == ',')
+						break;
+				}
+				// put the username, email, first name, and last name into a comma separted string
+				return_user_data = test_un + "," + test_email + ",";
+				for (++i; i < user_data.size(); ++i) {
+					return_user_data += user_data[i];
+				}
+
+				return return_user_data; // return the formatted user data: username,email,firstname,lastname
+			}
+		}
+		test_un.clear(); test_email.clear();
+	}
+
+	fh.close();
+	chdir(files_cwd);
+	return ""; // return an empty string since no username/email matched
+}
+
+
 int main() {
 
-	string s;
-	fstream fh("files/all_users.txt");
-	// fh.put('c');
+	string search_str = "joeb@g";
+	char* dir = (char*) malloc(MAX_PATH);
+	getcwd(dir, MAX_PATH);
 
-	// while(!fh.eof())
-	// 	getline(fh, s);
-	char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
-	fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
+	string rs = search(search_str, dir);
+	if(rs != "")
+	cout << rs << endl;
+	else
+		cout << "User not found\n";
+
+
+	// string s;
+	// fstream fh("files/all_users.txt");
+	// // fh.put('c');
+
+	// // while(!fh.eof())
+	// // 	getline(fh, s);
+	// char* index = (char*) malloc(MAX_INDEX_BYTES * sizeof(char)); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
+	// fh.getline(index, MAX_INDEX_BYTES - 1, '\n'); // index will get the first line in the file which contains a number followed by the EOL character
 	
-	string un, e, pw, fn, ln;
-	un = "joebeastlin"; e = "joeb@g"; pw = "password"; fn = "joe"; ln = "beastlin";
+	// string un, e, pw, fn, ln;
+	// un = "joebeastlin"; e = "joeb@g"; pw = "password"; fn = "joe"; ln = "beastlin";
 
-	string info = un + "," + e + "," + index + "," + pw + "," + fn + "," + ln; //+ '\n';
-	char* buffer = (char*) malloc(MAX_USER_INFO_BYTES);
-	strcpy(buffer, info.c_str());
+	// string info = un + "," + e + "," + index + "," + pw + "," + fn + "," + ln; //+ '\n';
+	// char* buffer = (char*) malloc(MAX_USER_INFO_BYTES);
+	// strcpy(buffer, info.c_str());
 
 
-	write_over_line(fh, buffer);
+	// write_over_line(fh, buffer);
 
 	// while(!fh.eof()) getline(fh,s);
 

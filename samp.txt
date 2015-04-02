@@ -1,5 +1,0 @@
-4
-jb,jb@g,1,pw,j,b
-ld,ld@g,2,pw,l,d
-ml,ml@g,3,pw,m,l
-lk,lk@g,4,hi,j,b
