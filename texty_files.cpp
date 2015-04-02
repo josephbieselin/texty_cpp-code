@@ -137,6 +137,10 @@ The parameter check will be used in a switch statement and do one of the followi
 */
 bool user_exists(fstream& fh, int check, const string& un, const string& email, const string& pw = "")
 {
+	// skip the first of the line of the file because it does not contain user info
+	string first_line_garbage;
+	fh.clear(); fh.seekp(0, ios::beg); getline(fh, garbage);
+
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
 
@@ -233,10 +237,6 @@ If no, return false
 */
 bool remove_user(fstream& fh, const string& un, const string& email, const string& index, const string& pw)
 {
-	string garbage;
-	// Reset any of the files flags and have the file stream pointing to the second line of all_users.txt
-	fh.clear(); fh.seekp(0, ios::beg); getline(fh, garbage);
-
 	if (user_exists(fh, 3, un, email, pw)) {
 		remove_user_from_files()
 		return true;
@@ -315,11 +315,6 @@ void register_user(string& un, const string& email, const string& pw, const stri
 		} else { // file is opened
 			char* index = (char*) malloc(MAX_INDEX_BYTES); // MAX_INDEX originally set to 1000000 meaning 999999 user indexes could be handled at the creation
 			fh.getline(index, MAX_INDEX_BYTES, ','); // index will get the first line in the file which contains a number followed by the EOL character
-			// The file stream will point to excess commas, so ignore those garbage values
-			// char* garbage = (char*) malloc(MAX_USER_INFO_BYTES);
-			// fh.getline(garbage, MAX_USER_INFO_BYTES);
-			int end_of_line = (int)'\n';
-			fh.ignore(MAX_USER_INFO_BYTES, end_of_line);
 
 			if (user_exists(fh, 1, un, email)) {
 				// IMPLEMENT WAY TO PASS BACK ERROR TO NETWORK THAT USER EXISTS ALREADY
@@ -389,4 +384,37 @@ int main() {
 	// register_user(un5, e5, pw5, fn5, ln5, my_cwd);
 
 	free(my_cwd);
+}
+
+
+
+void usingRemoveUser()
+{
+		chdir(CURRENT_DIR);
+	string un, email, pw, garbage;
+	un = "ld"; email = "ld@g"; pw = "bye";
+
+	char* my_cwd = (char*) malloc(MAX_PATH);
+	char* files_cwd = (char*) malloc(MAX_PATH);
+	getcwd(my_cwd, MAX_PATH);
+	getcwd(files_cwd, MAX_PATH);
+
+	strcat(files_cwd, USER_DIR);
+	chdir(files_cwd);
+	
+	fstream fh(USER_DATA_FILENAME);
+	getline(fh, garbage);	// first line is the index of the next user and commas
+
+	if (user_exists(fh, 3, un, email, pw)) {
+		ofstream temp_file("temp.txt");
+
+		remove_user(fh, temp_file, un, email, pw, files_cwd);
+
+		remove(USER_DATA_FILENAME);
+		rename("temp.txt", USER_DATA_FILENAME);
+	} else {
+		cout << "Data did not match user -- no deactivation" << endl;
+	}
+	chdir(my_cwd);
+
 }

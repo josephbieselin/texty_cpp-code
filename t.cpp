@@ -28,6 +28,10 @@ using namespace std;
 // 1. register, 2. log in, 3. deactivate
 bool user_exists(fstream& fh, int check, const string& un, const string& email, const string& pw = "")
 {
+	// skip the first of the line of the file because it does not contain user info
+	string first_line_garbage;
+	fh.clear(); fh.seekp(0, ios::beg); getline(fh, first_line_garbage);
+
 	// test_info is one line from the all_users.txt file
 	// test_info = un,email,index,pw,fn,ln
 
@@ -35,7 +39,7 @@ bool user_exists(fstream& fh, int check, const string& un, const string& email, 
 	char* test_email = (char*) malloc(EMAIL_BYTES);
 	char* test_pw = (char*) malloc(PW_BYTES);
 
-	char* garbage = (char*) malloc(GARBAGE_BYTES);
+	char* garbage = (char*) malloc(MAX_USER_INFO_BYTES);
 
 
 	while (!fh.eof()) {
@@ -100,7 +104,7 @@ void remove_user_from_files(fstream& fh, ofstream& temp_file, const string& inde
 		}
 
 		// if the current line's index is not the user we are removing, add them to the new temp file
-		if (temp_index != index) {
+		if (temp_index != index && temp != "") {
 			temp_file << temp;
 			temp_file << "\n";
 		}
@@ -118,10 +122,10 @@ Delete the user's followees.txt, followers.txt, and texts.txt files and the user
 void remove_user(fstream& fh, ofstream& temp_file, const string& un, const string& email, const string& pw, const char* my_cwd)
 {
 	string user_index;
-	
 	/* ---------------------------- REMOVING USER FROM all_users.txt --------------------------------- */
 	string temp, temp_username;
 	// place the first line of all_users.txt into the new temp file
+	fh.clear(); fh.seekp(0, ios::beg);
 	getline(fh, temp);
 	temp_file << temp; temp_file << "\n";
 
@@ -142,12 +146,12 @@ void remove_user(fstream& fh, ofstream& temp_file, const string& un, const strin
 		} else if (temp_username == un) { // this is the user we are removing
 			// get user's index
 			// first we must parse through the next data value which is the email and i is already at the index of email's first char
-			for ( ; i < temp.size(); ++i) {
+			for (++i; i < temp.size(); ++i) {
 				if (temp[i] == ',')
 					break;
 			}
 			// get user's index value until the next comma is hit
-			for ( ; i < temp.size(); ++i) {
+			for (++i; i < temp.size(); ++i) {
 				if (temp[i] == ',')
 					break;
 				user_index += temp[i];
@@ -156,7 +160,7 @@ void remove_user(fstream& fh, ofstream& temp_file, const string& un, const strin
 
 		temp_username.clear();
 	}
-	// I DO NOT THINK THIS IS NEEDED fh.clear(); fh.seekp(0, ios::beg);
+	fh.close();
 
 	/* ---------- REMOVING USER FROM OTHER PEOPLE'S followers.txt && followees.txt files ------------- */
 	// set up variables to change directories, assuming our CWD is where the "files" directory is located
@@ -165,8 +169,6 @@ void remove_user(fstream& fh, ofstream& temp_file, const string& un, const strin
 	char* other_user_dir_cwd = (char*) malloc(MAX_PATH); 	// will hold directory of "/files/Y" where Y is a number representing another user's directory
 	char* temp_dir = (char*) malloc(MAX_PATH);				// will hold directory of "/files/" as a way to use strcpy to reset other_user_dir_cwd for each new other user's index value
 	getcwd(files_cwd, MAX_PATH);
-	strcat(files_cwd, USER_DIR);
-	chdir(files_cwd);
 	// Change the current directory to the user's directory who is being removed
 	getcwd(user_dir_cwd, MAX_PATH);
 	strcat(user_dir_cwd, "/");
@@ -177,90 +179,105 @@ void remove_user(fstream& fh, ofstream& temp_file, const string& un, const strin
 	strcat(temp_dir, "/");
 	chdir(user_dir_cwd);
 	// delete the user's texts.txt file
-	remove("/texts.txt");
+	remove("texts.txt");
 	// for each other user in this user's followees.txt file, remove this user from the other user's followers.txt file
-	fstream followees_file("/followees.txt");
+	fstream followees_file("followees.txt");
 	string other_user_index;
 	while (!followees_file.eof()) {
 		getline(followees_file, temp);
-		for (size_t i = 0; i < temp.size(); ++i) {
-			if (temp[i] == ',')
-				break;
-			other_user_index += temp[i];
+		if (temp != "") {
+			for (size_t i = 0; i < temp.size(); ++i) {
+				if (temp[i] == ',')
+					break;
+				other_user_index += temp[i];
+			}
+			// change to the directory to the other user's directory and open their followers.txt file
+			strcat(other_user_dir_cwd, other_user_index.c_str());
+			chdir(other_user_dir_cwd);
+			fstream other_followers_file("followers.txt");
+			ofstream other_followers_temp_file("temp.txt");
+			// remove the current user from the other user's followers.txt file
+			remove_user_from_files(other_followers_file, other_followers_temp_file, user_index);
+			// remove the old file with the user currently in it, and rename the new temp file to its name
+			remove("followers.txt");
+			rename("temp.txt", "followers.txt");
+			other_followers_file.close(); other_followers_temp_file.close();
+			other_user_index.clear();
+			// reset other_user_dir_cwd to be concatenated with the next other user index
+			strcpy(other_user_dir_cwd, temp_dir);
 		}
-		// change to the directory to the other user's directory and open their followers.txt file
-		strcat(other_user_dir_cwd, other_user_index.c_str());
-		chdir(other_user_dir_cwd);
-		fstream other_followers_file("/followers.txt");
-		ofstream other_followers_temp_file("/temp.txt");
-		// remove the current user from the other user's followers.txt file
-		remove_user_from_files(other_followers_file, other_followers_temp_file, user_index);
-		// remove the old file with the user currently in it, and rename the new temp file to its name
-		remove("/followers.txt");
-		rename("/temp.txt", "/followers.txt");
-		other_followers_file.close(); other_followers_temp_file.close();
-		other_user_index.clear();
-		// reset other_user_dir_cwd to be concatenated with the next other user index
-		strcpy(other_user_dir_cwd, temp_dir);
 	}
+	followees_file.close();
 
 	chdir(user_dir_cwd);	// change directories back to the current user being removed to get his/her followers.txt file
 
-	fstream followers_file("/followers.txt");
+	fstream followers_file("followers.txt");
 	while (!followers_file.eof()) {
 		getline(followers_file, temp);
-		for (size_t i = 0; i < temp.size(); ++i) {
-			if( temp[i] = ',')
-				break;
-			other_user_index += temp[i];
+		if (temp != "") {
+			for (size_t j = 0; j < temp.size(); ++j) {
+				if( temp[j] == ',')
+					break;
+				other_user_index += temp[j];
+			}
+			// change to the directory to the other user's directory and open their followers.txt file
+			strcat(other_user_dir_cwd, other_user_index.c_str());
+			chdir(other_user_dir_cwd);
+			fstream other_followees_file("followees.txt");
+			ofstream other_followees_temp_file("temp.txt");
+			// remove the current user from the other user's followers.txt file
+			remove_user_from_files(other_followees_file, other_followees_temp_file, user_index);
+			// remove the old file with the user currently in it, and rename the new temp file to its name
+			remove("followees.txt");
+			rename("temp.txt", "followees.txt");
+			other_followees_file.close(); other_followees_temp_file.close();
+			other_user_index.clear();
+			// reset other_user_dir_cwd to be concatenated with the next other user index
+			strcpy(other_user_dir_cwd, temp_dir);
 		}
-		// change to the directory to the other user's directory and open their followers.txt file
-		strcat(other_user_dir_cwd, other_user_index.c_str());
-		chdir(other_user_dir_cwd);
-		fstream other_followees_file("/followees.txt");
-		ofstream other_followees_temp_file("/temp.txt");
-		// remove the current user from the other user's followers.txt file
-		remove_user_from_files(other_followees_file, other_followees_temp_file, user_index);
-		// remove the old file with the user currently in it, and rename the new temp file to its name
-		remove("/followees.txt");
-		rename("/temp.txt", "/followees.txt");
-		other_followees_file.close(); other_followees_temp_file.close();
-		other_user_index.clear();
-		// reset other_user_dir_cwd to be concatenated with the next other user index
-		strcpy(other_user_dir_cwd, temp_dir);
 	}
+	followers_file.close();
+
+	chdir(user_dir_cwd);
+
+	remove("followees.txt");
+	remove("followers.txt");
 
 	chdir(my_cwd); // setting the working directory back to what it was before the remove_user function was called
+	rmdir(user_dir_cwd);
+
+	free(files_cwd); free(user_dir_cwd); free(other_user_dir_cwd); free(temp_dir);
 }
 
 
 int main()
 {
-
-	string un, email, pw;
+	chdir(CURRENT_DIR);
+	string un, email, pw, garbage;
 	un = "ld"; email = "ld@g"; pw = "bye";
 
 	char* my_cwd = (char*) malloc(MAX_PATH);
 	char* files_cwd = (char*) malloc(MAX_PATH);
-	strcpy(my_cwd, USER_DIR);
-	chdir(my_cwd);
 	getcwd(my_cwd, MAX_PATH);
 	getcwd(files_cwd, MAX_PATH);
+
 	strcat(files_cwd, USER_DIR);
 	chdir(files_cwd);
-	fstream fh(ALL_USERS_FILE);
+	
+	fstream fh(USER_DATA_FILENAME);
+	getline(fh, garbage);	// first line is the index of the next user and commas
 
 	if (user_exists(fh, 3, un, email, pw)) {
-		ofstream temp_file("/temp.txt");
+		ofstream temp_file("temp.txt");
 
-		remove_user(fh, temp_file, un, email, pw, my_cwd);
+		remove_user(fh, temp_file, un, email, pw, files_cwd);
 
-		remove(ALL_USERS_FILE);
-		rename("/temp.txt", ALL_USERS_FILE);
+		remove(USER_DATA_FILENAME);
+		rename("temp.txt", USER_DATA_FILENAME);
 	} else {
 		cout << "Data did not match user -- no deactivation" << endl;
 	}
-
+	chdir(my_cwd);
 
 
 	// place the first of the all_users.txt into the new temp file
